@@ -9,6 +9,9 @@ RUN npm install
 
 COPY . .
 
+# Fix OpenSSL issue with React Scripts/Webpack
+ENV NODE_OPTIONS=--openssl-legacy-provider
+
 RUN npm run build
 
 # Stage 2: Nginx
