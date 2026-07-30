@@ -31,7 +31,7 @@ spec:
 
       - name: frontend
 
-        image: dharmasaiajay/frontend:latest
+        image: image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/frontend:latest
 
 
         ports:
