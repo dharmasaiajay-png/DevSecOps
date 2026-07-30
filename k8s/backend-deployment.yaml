@@ -25,7 +25,7 @@ spec:
 
       - name: backend
 
-        image: dharmasaiajay/backend:latest
+        image: image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/backend:latest
 
         ports:
         - containerPort: 3500
