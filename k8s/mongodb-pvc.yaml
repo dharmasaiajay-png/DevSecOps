@@ -9,4 +9,4 @@ spec:
   resources:
     requests:
       storage: 5Gi
-  storageClassName: gp2   # uses in-tree provisioner
+  storageClassName: gp2   # in-tree AWS EBS provisioner
