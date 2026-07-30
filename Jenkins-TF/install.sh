@@ -2,52 +2,45 @@
 # Update system
 sudo dnf update -y
 
-# Install Java, Git, Docker, wget, unzip
-sudo dnf install -y java-21-amazon-corretto git docker wget unzip
-sudo dnf install -y java-21-amazon-corretto-devel
+# Install Java, Git, Docker, Wget
+sudo dnf install -y java-21-amazon-corretto git docker wget
 
 # Enable and start Docker
 sudo systemctl enable docker
 sudo systemctl start docker
 
-# Add ec2-user to docker group
-sudo usermod -aG docker ec2-user
-
 # Install Jenkins
 sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/rpm-stable/jenkins.repo
-sudo rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io.key
+sudo rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2026.key
 sudo dnf install -y jenkins
 sudo systemctl enable jenkins
 sudo systemctl start jenkins
 
-# Install Terraform
-TERRAFORM_VERSION="1.9.5"
-wget https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
-unzip -o terraform_${TERRAFORM_VERSION}_linux_amd64.zip
-sudo mv terraform /usr/local/bin/
-terraform version
+# Install Terraform (HashiCorp official repo)
+sudo dnf install -y yum-utils
+sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+sudo dnf install -y terraform
 
-# Install kubectl (official Kubernetes release)
-sudo rm -f /usr/local/bin/kubectl
-curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
+# Install kubectl (fixed download link)
+curl -LO "https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl"
 chmod +x kubectl
 sudo mv kubectl /usr/local/bin/
 kubectl version --client
 
 # Install eksctl
-curl --silent --location "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
+curl --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
 sudo mv /tmp/eksctl /usr/local/bin
-eksctl version
 
 # Install Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-# Install Trivy (via Docker)
-sudo docker run --rm aquasec/trivy:latest --version
+# Install Trivy (binary method for Amazon Linux 2023)
+TRIVY_VERSION=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep tag_name | cut -d '"' -f4)
+curl -L https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz -o trivy.tar.gz
+tar zxvf trivy.tar.gz
+sudo mv trivy /usr/local/bin/
+rm -f trivy.tar.gz
 
-# Run SonarQube in Docker (avoid duplicate container names)
-if [ "$(sudo docker ps -aq -f name=sonar)" ]; then
-  echo "SonarQube container already exists, skipping..."
-else
-  sudo docker run -d --name sonar -p 9000:9000 -v sonarqube_data:/opt/sonarqube/data sonarqube:lts
-fi
+# Run SonarQube in Docker (remove old container if exists)
+sudo docker rm -f sonar || true
+sudo docker run -d --name sonar -p 9000:9000 sonarqube:lts
