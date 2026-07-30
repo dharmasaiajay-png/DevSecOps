@@ -2,7 +2,7 @@
 variable "region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "ap-south-1"
+  default     = "ap-south-2"
 }
 
 # AMI ID
@@ -15,7 +15,7 @@ variable "ami_id" {
 variable "instance_type" {
   description = "EC2 instance type for Jenkins server"
   type        = string
-  default     = "t2.medium"
+  default     = "t3.medium"
 }
 
 # Key Pair
