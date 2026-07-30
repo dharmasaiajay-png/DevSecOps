@@ -1,21 +1,25 @@
+# Data source for availability zones
+data "aws_availability_zones" "available" {}
+
 # VPC
 resource "aws_vpc" "jenkins_vpc" {
-  cidr_block = "10.0.0.0/16"
-  tags = { Name = "jenkins-vpc" }
+  cidr_block = var.vpc_cidr
+  tags       = merge(var.tags, { Name = "jenkins-vpc" })
 }
 
-# Subnet
+# Subnet (dynamic AZ)
 resource "aws_subnet" "jenkins_subnet" {
   vpc_id            = aws_vpc.jenkins_vpc.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "${var.region}a"
-  tags = { Name = "jenkins-subnet" }
+  cidr_block        = var.subnet_cidr
+  availability_zone = data.aws_availability_zones.available.names[0]
+
+  tags = merge(var.tags, { Name = "jenkins-subnet" })
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "jenkins_igw" {
   vpc_id = aws_vpc.jenkins_vpc.id
-  tags   = { Name = "jenkins-igw" }
+  tags   = merge(var.tags, { Name = "jenkins-igw" })
 }
 
 # Route Table
@@ -25,7 +29,7 @@ resource "aws_route_table" "jenkins_rt" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.jenkins_igw.id
   }
-  tags = { Name = "jenkins-rt" }
+  tags = merge(var.tags, { Name = "jenkins-rt" })
 }
 
 resource "aws_route_table_association" "jenkins_rta" {
@@ -66,7 +70,7 @@ resource "aws_security_group" "jenkins_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "jenkins-sg" }
+  tags = merge(var.tags, { Name = "jenkins-sg" })
 }
 
 # IAM Role + Instance Profile
@@ -98,6 +102,7 @@ resource "aws_instance" "Jenkins_Bastion_Server" {
 
   user_data = file("${path.module}/install.sh")
 
-  tags = { Name = "Jenkins_Bastion_Server" }
-}
+  associate_public_ip_address = true
 
+  tags = merge(var.tags, { Name = "Jenkins_Bastion_Server" })
+}
