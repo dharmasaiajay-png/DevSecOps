@@ -1,58 +1,36 @@
 apiVersion: apps/v1
 kind: Deployment
-
 metadata:
   name: backend
   namespace: devsecops
-
 spec:
   replicas: 2
-
   selector:
     matchLabels:
       app: backend
-
-
   template:
     metadata:
       labels:
         app: backend
-
-
     spec:
-
       containers:
-
       - name: backend
-
-        image: image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/backend:latest
-
+        image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/backend:latest
         ports:
         - containerPort: 3500
-
-
         env:
-
         - name: PORT
           value: "3500"
-
-
         - name: MONGO_CONN_STR
           value: "mongodb://mongodb:27017/devsecops"
-
-
         - name: USE_DB_AUTH
           value: "false"
-
-
         readinessProbe:
           httpGet:
             path: /ready
             port: 3500
           initialDelaySeconds: 10
           periodSeconds: 10
-
-
         livenessProbe:
           httpGet:
             path: /healthz
