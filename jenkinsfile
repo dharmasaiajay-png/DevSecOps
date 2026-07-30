@@ -2,60 +2,36 @@ pipeline {
     agent any
 
     tools {
-        // Use Node22 (already configured in Jenkins Global Tool Configuration)
+        jdk 'jdk21'
         nodejs 'Node22'
     }
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        FRONTEND_IMAGE = "frontend:latest"
-        BACKEND_IMAGE = "backend:latest"
+        SONAR_TOKEN = credentials('sonar-token')
+        AWS_REGION = 'ap-south-2'
+        ECR_REGISTRY = '564362507028.dkr.ecr.ap-south-2.amazonaws.com'
+        FRONTEND_REPO = "frontend"
+        BACKEND_REPO = "backend"
     }
 
     stages {
-
         stage('Checkout Source Code') {
             steps {
-                // Public repo clone – no credentials required
                 git branch: 'main',
                     url: 'https://github.com/dharmasaiajay-png/DevSecOps.git'
-            }
-        }
-
-        stage('Install Frontend Dependencies') {
-            steps {
-                dir('Application-Code/frontend') {
-                    sh 'npm install'
-                }
-            }
-        }
-
-        stage('Build Frontend') {
-            steps {
-                dir('Application-Code/frontend') {
-                    // Fix OpenSSL error by enabling legacy provider
-                    sh 'export NODE_OPTIONS=--openssl-legacy-provider && npm run build'
-                }
-            }
-        }
-
-        stage('Install Backend Dependencies') {
-            steps {
-                dir('Application-Code/backend') {
-                    sh 'npm install'
-                }
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh """
-                    ${SCANNER_HOME}/bin/sonar-scanner \
-                    -Dsonar.projectKey=devops-project \
-                    -Dsonar.sources=Application-Code \
-                    -Dsonar.login=$SONAR_AUTH_TOKEN
-                    """
+                    sh '''
+                        ${SCANNER_HOME}/bin/sonar-scanner \
+                        -Dsonar.projectKey=devops-project \
+                        -Dsonar.sources=Application-Code \
+                        -Dsonar.login=$SONAR_TOKEN
+                    '''
                 }
             }
         }
@@ -68,32 +44,73 @@ pipeline {
             }
         }
 
+        stage('Verify Docker Access') {
+            steps {
+                sh 'docker ps'
+            }
+        }
+
         stage('Trivy File System Scan') {
             steps {
-                sh 'trivy fs .'
+                sh 'trivy fs Application-Code/frontend'
+                sh 'trivy fs Application-Code/backend'
             }
         }
 
         stage('Build Frontend Docker Image') {
             steps {
-                dir('Application-Code/frontend') {
-                    sh "docker build -t ${FRONTEND_IMAGE} ."
+                script {
+                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    dir('Application-Code/frontend') {
+                        sh "docker build -t ${FRONTEND_REPO}:latest -t ${FRONTEND_REPO}:${commitId} ."
+                    }
                 }
             }
         }
 
         stage('Build Backend Docker Image') {
             steps {
-                dir('Application-Code/backend') {
-                    sh "docker build -t ${BACKEND_IMAGE} ."
+                script {
+                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    dir('Application-Code/backend') {
+                        sh "docker build -t ${BACKEND_REPO}:latest -t ${BACKEND_REPO}:${commitId} ."
+                    }
                 }
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh "trivy image ${FRONTEND_IMAGE}"
-                sh "trivy image ${BACKEND_IMAGE}"
+                sh "trivy image ${FRONTEND_REPO}:latest"
+                sh "trivy image ${BACKEND_REPO}:latest"
+            }
+        }
+
+        stage('Push Images to ECR') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-ecr-creds']]) {
+                    script {
+                        def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+
+                        sh """
+                            aws ecr get-login-password --region $AWS_REGION \
+                            | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+                            docker tag ${FRONTEND_REPO}:latest $ECR_REGISTRY/${FRONTEND_REPO}:latest
+                            docker tag ${FRONTEND_REPO}:${commitId} $ECR_REGISTRY/${FRONTEND_REPO}:${commitId}
+
+                            docker tag ${BACKEND_REPO}:latest $ECR_REGISTRY/${BACKEND_REPO}:latest
+                            docker tag ${BACKEND_REPO}:${commitId} $ECR_REGISTRY/${BACKEND_REPO}:${commitId}
+
+                            docker push $ECR_REGISTRY/${FRONTEND_REPO}:latest
+                            docker push $ECR_REGISTRY/${FRONTEND_REPO}:${commitId}
+
+                            docker push $ECR_REGISTRY/${BACKEND_REPO}:latest
+                            docker push $ECR_REGISTRY/${BACKEND_REPO}:${commitId}
+                        """
+                    }
+                }
             }
         }
     }
@@ -102,13 +119,11 @@ pipeline {
         always {
             cleanWs()
         }
-
         success {
-            echo 'Pipeline completed successfully.'
+            echo 'Pipeline completed successfully with commit-based image tagging.'
         }
-
         failure {
-            echo 'Pipeline failed. Check the stage logs.'
+            echo 'Pipeline failed. Check logs for details.'
         }
     }
 }
