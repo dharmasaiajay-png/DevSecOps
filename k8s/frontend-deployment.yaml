@@ -15,18 +15,29 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/frontend:latest
+        image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/frontend:v5
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
         readinessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 80
-          initialDelaySeconds: 10
+          initialDelaySeconds: 5
           periodSeconds: 10
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /
             port: 80
-          initialDelaySeconds: 30
+          initialDelaySeconds: 15
           periodSeconds: 20
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
