@@ -22,7 +22,31 @@ spec:
             port:
               number: 80
 
-      - path: /api
+      - path: /healthz
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3500
+
+      - path: /ready
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3500
+
+      - path: /started
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3500
+
+      - path: /api/tasks
         pathType: Prefix
         backend:
           service:
