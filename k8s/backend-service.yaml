@@ -5,14 +5,12 @@ metadata:
   name: backend
   namespace: devsecops
 
-
 spec:
-
   selector:
     app: backend
 
-
   ports:
+    - port: 3500
+      targetPort: 3500
 
-  - port: 3500
-    targetPort: 3500
+  type: ClusterIP
