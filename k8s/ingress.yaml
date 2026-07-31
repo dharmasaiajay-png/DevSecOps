@@ -10,10 +10,10 @@ metadata:
 
 spec:
   rules:
-
-  - host: frontend.example.com
+  - host: ajaydevsecopsproject.duckdns.org
     http:
       paths:
+
       - path: /
         pathType: Prefix
         backend:
@@ -22,10 +22,7 @@ spec:
             port:
               number: 80
 
-  - host: backend.example.com
-    http:
-      paths:
-      - path: /
+      - path: /api
         pathType: Prefix
         backend:
           service:
