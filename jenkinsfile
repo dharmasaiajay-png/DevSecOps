@@ -8,17 +8,20 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        SONAR_TOKEN = credentials('sonar-token')
-        AWS_REGION = 'ap-south-2'
+
+        AWS_REGION   = 'ap-south-2'
         ECR_REGISTRY = '564362507028.dkr.ecr.ap-south-2.amazonaws.com'
-        FRONTEND_REPO = "frontend"
-        BACKEND_REPO = "backend"
+
+        FRONTEND_REPO = 'frontend'
+        BACKEND_REPO  = 'backend'
     }
 
     stages {
+
         stage('Checkout Source Code') {
             steps {
                 git branch: 'main',
+                    credentialsId: 'github-creds',
                     url: 'https://github.com/dharmasaiajay-png/DevSecOps.git'
             }
         }
@@ -26,12 +29,15 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh '''
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+
+                        sh """
                         ${SCANNER_HOME}/bin/sonar-scanner \
                         -Dsonar.projectKey=devops-project \
                         -Dsonar.sources=Application-Code \
                         -Dsonar.login=$SONAR_TOKEN
-                    '''
+                        """
+                    }
                 }
             }
         }
@@ -60,9 +66,20 @@ pipeline {
         stage('Build Frontend Docker Image') {
             steps {
                 script {
-                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+
+                    env.COMMIT_ID = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+
                     dir('Application-Code/frontend') {
-                        sh "docker build -t ${FRONTEND_REPO}:latest -t ${FRONTEND_REPO}:${commitId} ."
+
+                        sh """
+                        docker build \
+                        --build-arg REACT_APP_BACKEND_URL=http://ajaydevsecopsproject.duckdns.org/api \
+                        -t ${FRONTEND_REPO}:latest \
+                        -t ${FRONTEND_REPO}:${COMMIT_ID} .
+                        """
                     }
                 }
             }
@@ -70,60 +87,106 @@ pipeline {
 
         stage('Build Backend Docker Image') {
             steps {
-                script {
-                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                    dir('Application-Code/backend') {
-                        sh "docker build -t ${BACKEND_REPO}:latest -t ${BACKEND_REPO}:${commitId} ."
-                    }
+
+                dir('Application-Code/backend') {
+
+                    sh """
+                    docker build \
+                    -t ${BACKEND_REPO}:latest \
+                    -t ${BACKEND_REPO}:${COMMIT_ID} .
+                    """
+
                 }
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh "trivy image ${FRONTEND_REPO}:latest"
-                sh "trivy image ${BACKEND_REPO}:latest"
+
+                sh "trivy image ${FRONTEND_REPO}:${COMMIT_ID}"
+                sh "trivy image ${BACKEND_REPO}:${COMMIT_ID}"
+
             }
         }
 
         stage('Push Images to ECR') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                  credentialsId: 'aws-ecr-creds']]) {
-                    script {
-                        def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
 
-                        sh """
-                            aws ecr get-login-password --region $AWS_REGION \
-                            | docker login --username AWS --password-stdin $ECR_REGISTRY
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr-creds'
+                ]]) {
 
-                            docker tag ${FRONTEND_REPO}:latest $ECR_REGISTRY/${FRONTEND_REPO}:latest
-                            docker tag ${FRONTEND_REPO}:${commitId} $ECR_REGISTRY/${FRONTEND_REPO}:${commitId}
+                    sh """
 
-                            docker tag ${BACKEND_REPO}:latest $ECR_REGISTRY/${BACKEND_REPO}:latest
-                            docker tag ${BACKEND_REPO}:${commitId} $ECR_REGISTRY/${BACKEND_REPO}:${commitId}
+                    aws ecr get-login-password --region ${AWS_REGION} \
+                    | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                            docker push $ECR_REGISTRY/${FRONTEND_REPO}:latest
-                            docker push $ECR_REGISTRY/${FRONTEND_REPO}:${commitId}
+                    docker tag ${FRONTEND_REPO}:latest ${ECR_REGISTRY}/${FRONTEND_REPO}:latest
+                    docker tag ${FRONTEND_REPO}:${COMMIT_ID} ${ECR_REGISTRY}/${FRONTEND_REPO}:${COMMIT_ID}
 
-                            docker push $ECR_REGISTRY/${BACKEND_REPO}:latest
-                            docker push $ECR_REGISTRY/${BACKEND_REPO}:${commitId}
-                        """
-                    }
+                    docker tag ${BACKEND_REPO}:latest ${ECR_REGISTRY}/${BACKEND_REPO}:latest
+                    docker tag ${BACKEND_REPO}:${COMMIT_ID} ${ECR_REGISTRY}/${BACKEND_REPO}:${COMMIT_ID}
+
+                    docker push ${ECR_REGISTRY}/${FRONTEND_REPO}:latest
+                    docker push ${ECR_REGISTRY}/${FRONTEND_REPO}:${COMMIT_ID}
+
+                    docker push ${ECR_REGISTRY}/${BACKEND_REPO}:latest
+                    docker push ${ECR_REGISTRY}/${BACKEND_REPO}:${COMMIT_ID}
+
+                    """
                 }
             }
         }
+
+        stage('Update Kubernetes Manifests') {
+            steps {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'github-creds',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_TOKEN'
+                    )
+                ]) {
+
+                    sh """
+
+                    echo "Updating Kubernetes manifests..."
+
+                    sed -i "s#${ECR_REGISTRY}/frontend:.*#${ECR_REGISTRY}/frontend:${COMMIT_ID}#g" k8s/frontend-deployment.yaml
+
+                    sed -i "s#${ECR_REGISTRY}/backend:.*#${ECR_REGISTRY}/backend:${COMMIT_ID}#g" k8s/backend-deployment.yaml
+
+                    git config user.name "Jenkins"
+                    git config user.email "jenkins@devsecops.com"
+
+                    git add k8s/frontend-deployment.yaml
+                    git add k8s/backend-deployment.yaml
+
+                    git diff --cached --quiet || git commit -m "[skip ci] Update images to ${COMMIT_ID}"
+
+                    git push https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/dharmasaiajay-png/DevSecOps.git HEAD:main
+
+                    """
+                }
+            }
+        }
+
     }
 
     post {
+
+        success {
+            echo "Pipeline completed successfully."
+        }
+
+        failure {
+            echo "Pipeline failed."
+        }
+
         always {
             cleanWs()
-        }
-        success {
-            echo 'Pipeline completed successfully with commit-based image tagging.'
-        }
-        failure {
-            echo 'Pipeline failed. Check logs for details.'
         }
     }
 }
