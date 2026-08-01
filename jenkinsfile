@@ -9,7 +9,7 @@ pipeline {
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
 
-        AWS_REGION   = 'ap-south-2'
+        AWS_REGION = 'ap-south-2'
         ECR_REGISTRY = '564362507028.dkr.ecr.ap-south-2.amazonaws.com'
 
         FRONTEND_REPO = 'frontend'
@@ -31,12 +31,12 @@ pipeline {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
 
-                        sh """
-                        ${SCANNER_HOME}/bin/sonar-scanner \
+                        sh '''
+                        $SCANNER_HOME/bin/sonar-scanner \
                         -Dsonar.projectKey=devops-project \
                         -Dsonar.sources=Application-Code \
-                        -Dsonar.login=$SONAR_TOKEN
-                        """
+                        -Dsonar.token=$SONAR_TOKEN
+                        '''
                     }
                 }
             }
@@ -44,13 +44,13 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
+                timeout(time: 15, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('Verify Docker Access') {
+        stage('Verify Docker') {
             steps {
                 sh 'docker ps'
             }
@@ -63,7 +63,7 @@ pipeline {
             }
         }
 
-        stage('Build Frontend Docker Image') {
+        stage('Build Frontend Image') {
             steps {
                 script {
 
@@ -76,7 +76,6 @@ pipeline {
 
                         sh """
                         docker build \
-                        --build-arg REACT_APP_BACKEND_URL=http://ajaydevsecopsproject.duckdns.org/api \
                         -t ${FRONTEND_REPO}:latest \
                         -t ${FRONTEND_REPO}:${COMMIT_ID} .
                         """
@@ -85,7 +84,7 @@ pipeline {
             }
         }
 
-        stage('Build Backend Docker Image') {
+        stage('Build Backend Image') {
             steps {
 
                 dir('Application-Code/backend') {
@@ -95,7 +94,6 @@ pipeline {
                     -t ${BACKEND_REPO}:latest \
                     -t ${BACKEND_REPO}:${COMMIT_ID} .
                     """
-
                 }
             }
         }
@@ -109,7 +107,8 @@ pipeline {
             }
         }
 
-        stage('Push Images to ECR') {
+        stage('Push Images To ECR') {
+
             steps {
 
                 withCredentials([[
@@ -140,6 +139,7 @@ pipeline {
         }
 
         stage('Update Kubernetes Manifests') {
+
             steps {
 
                 withCredentials([
@@ -154,9 +154,9 @@ pipeline {
 
                     echo "Updating Kubernetes manifests..."
 
-                    sed -i "s#${ECR_REGISTRY}/frontend:.*#${ECR_REGISTRY}/frontend:${COMMIT_ID}#g" k8s/frontend-deployment.yaml
+                    sed -i "s#image: .*frontend:.*#image: ${ECR_REGISTRY}/frontend:${COMMIT_ID}#g" k8s/frontend-deployment.yaml
 
-                    sed -i "s#${ECR_REGISTRY}/backend:.*#${ECR_REGISTRY}/backend:${COMMIT_ID}#g" k8s/backend-deployment.yaml
+                    sed -i "s#image: .*backend:.*#image: ${ECR_REGISTRY}/backend:${COMMIT_ID}#g" k8s/backend-deployment.yaml
 
                     git config user.name "Jenkins"
                     git config user.email "jenkins@devsecops.com"
@@ -164,7 +164,7 @@ pipeline {
                     git add k8s/frontend-deployment.yaml
                     git add k8s/backend-deployment.yaml
 
-                    git diff --cached --quiet || git commit -m "[skip ci] Update images to ${COMMIT_ID}"
+                    git commit -m "Update images to ${COMMIT_ID}" || echo "No changes to commit"
 
                     git push https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/dharmasaiajay-png/DevSecOps.git HEAD:main
 
