@@ -36,16 +36,33 @@ spec:
           value: "3500"
 
 
+        # MongoDB authentication credentials from Kubernetes Secret
+        - name: MONGO_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-secret
+              key: MONGO_INITDB_ROOT_USERNAME
+
+
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-secret
+              key: MONGO_INITDB_ROOT_PASSWORD
+
+
+        # Authenticated MongoDB connection string
         - name: MONGO_CONN_STR
-          value: "mongodb://mongodb.devsecops.svc.cluster.local:27017/devsecops"
+          value: "mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@mongodb.devsecops.svc.cluster.local:27017/devsecops?authSource=admin"
 
 
         - name: USE_DB_AUTH
-          value: "false"
+          value: "true"
 
 
 
         readinessProbe:
+
           httpGet:
             path: /ready
             port: 3500
@@ -59,6 +76,7 @@ spec:
 
 
         livenessProbe:
+
           httpGet:
             path: /healthz
             port: 3500
@@ -72,6 +90,7 @@ spec:
 
 
         startupProbe:
+
           httpGet:
             path: /started
             port: 3500
