@@ -22,7 +22,9 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/frontend:v5
+
+        image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/frontend:IMAGE_TAG
+        imagePullPolicy: Always
 
         ports:
         - containerPort: 80
@@ -31,20 +33,29 @@ spec:
           requests:
             cpu: 250m
             memory: 256Mi
+
           limits:
             cpu: 500m
             memory: 512Mi
+
 
         livenessProbe:
           httpGet:
             path: /
             port: 80
+
           initialDelaySeconds: 15
           periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+
 
         readinessProbe:
           httpGet:
             path: /
             port: 80
+
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
