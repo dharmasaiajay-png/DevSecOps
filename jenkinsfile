@@ -9,7 +9,7 @@ pipeline {
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
 
-        AWS_REGION = 'ap-south-2'
+        AWS_REGION   = 'ap-south-2'
         ECR_REGISTRY = '564362507028.dkr.ecr.ap-south-2.amazonaws.com'
 
         FRONTEND_REPO = 'frontend'
@@ -33,9 +33,9 @@ pipeline {
 
                         sh '''
                         $SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectKey=devops-project \
-                        -Dsonar.sources=Application-Code \
-                        -Dsonar.token=$SONAR_TOKEN
+                          -Dsonar.projectKey=devops-project \
+                          -Dsonar.sources=Application-Code \
+                          -Dsonar.token=$SONAR_TOKEN
                         '''
                     }
                 }
@@ -58,8 +58,8 @@ pipeline {
 
         stage('Trivy File System Scan') {
             steps {
-                sh 'trivy fs Application-Code/frontend'
-                sh 'trivy fs Application-Code/backend'
+                sh 'trivy fs --skip-version-check Application-Code/frontend'
+                sh 'trivy fs --skip-version-check Application-Code/backend'
             }
         }
 
@@ -69,8 +69,9 @@ pipeline {
 
                     sh """
                     docker build \
-                    -t ${FRONTEND_REPO}:latest \
-                    -t ${FRONTEND_REPO}:${BUILD_NUMBER} .
+                      --build-arg REACT_APP_BACKEND_URL=/api/tasks \
+                      -t ${FRONTEND_REPO}:latest \
+                      -t ${FRONTEND_REPO}:${BUILD_NUMBER} .
                     """
                 }
             }
@@ -82,8 +83,8 @@ pipeline {
 
                     sh """
                     docker build \
-                    -t ${BACKEND_REPO}:latest \
-                    -t ${BACKEND_REPO}:${BUILD_NUMBER} .
+                      -t ${BACKEND_REPO}:latest \
+                      -t ${BACKEND_REPO}:${BUILD_NUMBER} .
                     """
                 }
             }
@@ -91,13 +92,12 @@ pipeline {
 
         stage('Trivy Image Scan') {
             steps {
-                sh "trivy image ${FRONTEND_REPO}:${BUILD_NUMBER}"
-                sh "trivy image ${BACKEND_REPO}:${BUILD_NUMBER}"
+                sh "trivy image --skip-version-check ${FRONTEND_REPO}:${BUILD_NUMBER}"
+                sh "trivy image --skip-version-check ${BACKEND_REPO}:${BUILD_NUMBER}"
             }
         }
 
         stage('Push Images To ECR') {
-
             steps {
 
                 withCredentials([[
@@ -106,9 +106,8 @@ pipeline {
                 ]]) {
 
                     sh """
-
-                    aws ecr get-login-password --region ${AWS_REGION} \
-                    | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
                     docker tag ${FRONTEND_REPO}:latest ${ECR_REGISTRY}/${FRONTEND_REPO}:latest
                     docker tag ${FRONTEND_REPO}:${BUILD_NUMBER} ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_NUMBER}
@@ -121,14 +120,12 @@ pipeline {
 
                     docker push ${ECR_REGISTRY}/${BACKEND_REPO}:latest
                     docker push ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_NUMBER}
-
                     """
                 }
             }
         }
 
         stage('Update Kubernetes Manifests') {
-
             steps {
 
                 withCredentials([
@@ -139,14 +136,13 @@ pipeline {
                     )
                 ]) {
 
-                    sh """
-
+                    sh '''
                     echo "Updating Kubernetes manifests..."
 
-                    sed -i "s#image: .*frontend:.*#image: ${ECR_REGISTRY}/frontend:${BUILD_NUMBER}#g" \
+                    sed -i "s#image: .*frontend:.*#image: '"${ECR_REGISTRY}"'/frontend:'"${BUILD_NUMBER}"'#g" \
                     k8s/frontend/frontend-deployment.yaml
 
-                    sed -i "s#image: .*backend:.*#image: ${ECR_REGISTRY}/backend:${BUILD_NUMBER}#g" \
+                    sed -i "s#image: .*backend:.*#image: '"${ECR_REGISTRY}"'/backend:'"${BUILD_NUMBER}"'#g" \
                     k8s/backend/backend-deployment.yaml
 
                     git config user.name "Jenkins"
@@ -158,12 +154,10 @@ pipeline {
                     git commit -m "Update images to build ${BUILD_NUMBER}" || echo "No changes to commit"
 
                     git push https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/dharmasaiajay-png/DevSecOps.git HEAD:main
-
-                    """
+                    '''
                 }
             }
         }
-
     }
 
     post {
