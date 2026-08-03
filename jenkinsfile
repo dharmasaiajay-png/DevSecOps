@@ -65,34 +65,25 @@ pipeline {
 
         stage('Build Frontend Image') {
             steps {
-                script {
+                dir('Application-Code/frontend') {
 
-                    env.COMMIT_ID = sh(
-                        script: 'git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
-
-                    dir('Application-Code/frontend') {
-
-                        sh """
-                        docker build \
-                        -t ${FRONTEND_REPO}:latest \
-                        -t ${FRONTEND_REPO}:${COMMIT_ID} .
-                        """
-                    }
+                    sh """
+                    docker build \
+                    -t ${FRONTEND_REPO}:latest \
+                    -t ${FRONTEND_REPO}:${BUILD_NUMBER} .
+                    """
                 }
             }
         }
 
         stage('Build Backend Image') {
             steps {
-
                 dir('Application-Code/backend') {
 
                     sh """
                     docker build \
                     -t ${BACKEND_REPO}:latest \
-                    -t ${BACKEND_REPO}:${COMMIT_ID} .
+                    -t ${BACKEND_REPO}:${BUILD_NUMBER} .
                     """
                 }
             }
@@ -100,10 +91,8 @@ pipeline {
 
         stage('Trivy Image Scan') {
             steps {
-
-                sh "trivy image ${FRONTEND_REPO}:${COMMIT_ID}"
-                sh "trivy image ${BACKEND_REPO}:${COMMIT_ID}"
-
+                sh "trivy image ${FRONTEND_REPO}:${BUILD_NUMBER}"
+                sh "trivy image ${BACKEND_REPO}:${BUILD_NUMBER}"
             }
         }
 
@@ -122,16 +111,16 @@ pipeline {
                     | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
                     docker tag ${FRONTEND_REPO}:latest ${ECR_REGISTRY}/${FRONTEND_REPO}:latest
-                    docker tag ${FRONTEND_REPO}:${COMMIT_ID} ${ECR_REGISTRY}/${FRONTEND_REPO}:${COMMIT_ID}
+                    docker tag ${FRONTEND_REPO}:${BUILD_NUMBER} ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_NUMBER}
 
                     docker tag ${BACKEND_REPO}:latest ${ECR_REGISTRY}/${BACKEND_REPO}:latest
-                    docker tag ${BACKEND_REPO}:${COMMIT_ID} ${ECR_REGISTRY}/${BACKEND_REPO}:${COMMIT_ID}
+                    docker tag ${BACKEND_REPO}:${BUILD_NUMBER} ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_NUMBER}
 
                     docker push ${ECR_REGISTRY}/${FRONTEND_REPO}:latest
-                    docker push ${ECR_REGISTRY}/${FRONTEND_REPO}:${COMMIT_ID}
+                    docker push ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_NUMBER}
 
                     docker push ${ECR_REGISTRY}/${BACKEND_REPO}:latest
-                    docker push ${ECR_REGISTRY}/${BACKEND_REPO}:${COMMIT_ID}
+                    docker push ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_NUMBER}
 
                     """
                 }
@@ -154,17 +143,19 @@ pipeline {
 
                     echo "Updating Kubernetes manifests..."
 
-                    sed -i "s#image: .*frontend:.*#image: ${ECR_REGISTRY}/frontend:${COMMIT_ID}#g" k8s/frontend-deployment.yaml
+                    sed -i "s#image: .*frontend:.*#image: ${ECR_REGISTRY}/frontend:${BUILD_NUMBER}#g" \
+                    k8s/frontend/frontend-deployment.yaml
 
-                    sed -i "s#image: .*backend:.*#image: ${ECR_REGISTRY}/backend:${COMMIT_ID}#g" k8s/backend-deployment.yaml
+                    sed -i "s#image: .*backend:.*#image: ${ECR_REGISTRY}/backend:${BUILD_NUMBER}#g" \
+                    k8s/backend/backend-deployment.yaml
 
                     git config user.name "Jenkins"
                     git config user.email "jenkins@devsecops.com"
 
-                    git add k8s/frontend-deployment.yaml
-                    git add k8s/backend-deployment.yaml
+                    git add k8s/frontend/frontend-deployment.yaml
+                    git add k8s/backend/backend-deployment.yaml
 
-                    git commit -m "Update images to ${COMMIT_ID}" || echo "No changes to commit"
+                    git commit -m "Update images to build ${BUILD_NUMBER}" || echo "No changes to commit"
 
                     git push https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/dharmasaiajay-png/DevSecOps.git HEAD:main
 
