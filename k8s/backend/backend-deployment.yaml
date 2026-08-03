@@ -22,7 +22,7 @@ spec:
 
       - name: backend
 
-        image: 564362507028.dkr.ecr.ap-south-2.amazonaws.com/backend:27
+        image: '564362507028.dkr.ecr.ap-south-2.amazonaws.com'/backend:'28'
         imagePullPolicy: Always
 
 
