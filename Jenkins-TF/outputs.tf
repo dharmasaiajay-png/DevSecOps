@@ -1,29 +1,24 @@
-# Public IP of Jenkins Server
 output "jenkins_public_ip" {
-  description = "Public IP address of the Jenkins Bastion server"
-  value       = aws_instance.Jenkins_Bastion_Server.public_ip
+  description = "Public IP of Jenkins server"
+  value       = aws_instance.jenkins_bastion_server.public_ip
 }
 
-# Public DNS of Jenkins Server
 output "jenkins_public_dns" {
-  description = "Public DNS name of the Jenkins Bastion server"
-  value       = aws_instance.Jenkins_Bastion_Server.public_dns
+  description = "Public DNS of Jenkins server"
+  value       = aws_instance.jenkins_bastion_server.public_dns
 }
 
-# VPC ID
-output "vpc_id" {
-  description = "ID of the VPC created for Jenkins"
-  value       = aws_vpc.jenkins_vpc.id
+output "jenkins_instance_id" {
+  description = "Jenkins EC2 instance ID"
+  value       = aws_instance.jenkins_bastion_server.id
 }
 
-# Subnet ID
-output "subnet_id" {
-  description = "ID of the subnet created for Jenkins"
-  value       = aws_subnet.jenkins_subnet.id
+output "jenkins_url" {
+  description = "Jenkins URL"
+  value       = "http://${aws_instance.jenkins_bastion_server.public_ip}:8080"
 }
 
-# Security Group ID
-output "security_group_id" {
-  description = "ID of the security group attached to Jenkins server"
-  value       = aws_security_group.jenkins_sg.id
+output "sonarqube_url" {
+  description = "SonarQube URL"
+  value       = "http://${aws_instance.jenkins_bastion_server.public_ip}:9000"
 }
