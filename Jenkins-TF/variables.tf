@@ -2,7 +2,7 @@
 variable "region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "ap-south-2"
+  default     = "ap-south-1"
 }
 
 # AMI ID
@@ -42,9 +42,8 @@ variable "subnet_cidr" {
 variable "tags" {
   description = "Common tags to apply to resources"
   type        = map(string)
-  default     = {
+  default = {
     Project = "DevSecOps"
     Owner   = "Ajay-Magneq"
   }
 }
-
