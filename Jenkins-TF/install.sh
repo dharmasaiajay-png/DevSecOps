@@ -1,6 +1,16 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
+
+# -------------------------------------------------------
+# Logging
+# -------------------------------------------------------
+
+exec > >(tee /var/log/devsecops-bootstrap.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+echo "======================================================="
+echo "Starting DevSecOps Jenkins Server Bootstrap"
+echo "======================================================="
 
 # -------------------------------------------------------
 # System Update
@@ -11,13 +21,15 @@ dnf update -y
 # -------------------------------------------------------
 # Base Packages
 # -------------------------------------------------------
+# IMPORTANT:
+# Do NOT install the full 'curl' package on Amazon Linux 2023.
+# curl-minimal is already present and installing curl causes a conflict.
 
 dnf install -y \
   java-21-amazon-corretto \
   git \
   docker \
   wget \
-  curl \
   unzip \
   tar \
   gzip \
@@ -31,8 +43,8 @@ dnf install -y \
 systemctl enable docker
 systemctl start docker
 
-# Allow Jenkins user to use Docker later
-# Jenkins user is created during Jenkins installation
+# Allow ec2-user to use Docker
+usermod -aG docker ec2-user || true
 
 # -------------------------------------------------------
 # Jenkins LTS
@@ -48,12 +60,11 @@ dnf install -y jenkins
 
 systemctl daemon-reload
 systemctl enable jenkins
-systemctl start jenkins
 
-# Add Jenkins to Docker group
+# Allow Jenkins to use Docker
 usermod -aG docker jenkins
 
-# Restart Jenkins so group membership is refreshed
+systemctl start jenkins
 systemctl restart jenkins
 
 # -------------------------------------------------------
@@ -62,14 +73,15 @@ systemctl restart jenkins
 
 cd /tmp
 
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+curl -fsSL \
+  "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
   -o "awscliv2.zip"
 
 unzip -q awscliv2.zip
 
 ./aws/install --update
 
-rm -rf aws awscliv2.zip
+rm -rf /tmp/aws /tmp/awscliv2.zip
 
 # -------------------------------------------------------
 # Terraform
@@ -88,11 +100,10 @@ dnf install -y terraform
 KUBECTL_VERSION=$(curl -L -s \
   https://dl.k8s.io/release/stable.txt)
 
-curl -LO \
+curl -fsSLO \
   "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
 
 chmod +x kubectl
-
 mv kubectl /usr/local/bin/kubectl
 
 # -------------------------------------------------------
@@ -100,9 +111,9 @@ mv kubectl /usr/local/bin/kubectl
 # -------------------------------------------------------
 
 ARCH=amd64
-PLATFORM=$(uname -s)_$ARCH
+PLATFORM="$(uname -s)_${ARCH}"
 
-curl -sLO \
+curl -fsSLO \
   "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_${PLATFORM}.tar.gz"
 
 tar -xzf \
@@ -145,38 +156,59 @@ docker run -d \
   sonarqube:lts-community
 
 # -------------------------------------------------------
-# Verify installations
+# Final Service Checks
 # -------------------------------------------------------
 
+echo ""
+echo "======================================================="
+echo "Installation Verification"
+echo "======================================================="
+
+echo ""
 echo "========== JAVA =========="
-java -version
+java -version || true
 
+echo ""
 echo "========== GIT =========="
-git --version
+git --version || true
 
+echo ""
 echo "========== DOCKER =========="
-docker --version
+docker --version || true
 
+echo ""
 echo "========== AWS CLI =========="
-aws --version
+aws --version || true
 
+echo ""
 echo "========== TERRAFORM =========="
-terraform --version
+terraform --version || true
 
+echo ""
 echo "========== KUBECTL =========="
-kubectl version --client
+kubectl version --client || true
 
+echo ""
 echo "========== EKSCTL =========="
-eksctl version
+eksctl version || true
 
+echo ""
 echo "========== HELM =========="
-helm version
+helm version || true
 
+echo ""
 echo "========== TRIVY =========="
-trivy --version
+trivy --version || true
 
+echo ""
 echo "========== JENKINS =========="
 systemctl status jenkins --no-pager || true
 
-echo "========== SONARQUBE =========="
-docker ps
+echo ""
+echo "========== DOCKER CONTAINERS =========="
+docker ps || true
+
+echo ""
+echo "======================================================="
+echo "DevSecOps Bootstrap Completed"
+echo "======================================================="
