@@ -7,7 +7,7 @@ variable "region" {
 
 # AMI ID
 variable "ami_id" {
-  description = "Amazon Linux 2 AMI ID"
+  description = "Amazon Linux 2023 AMI ID"
   type        = string
 }
 
