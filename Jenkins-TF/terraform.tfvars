@@ -1,4 +1,4 @@
-region        = "ap-south-2"
+region        = "ap-south-1"
 ami_id        = "ami-0c8dc555a7e1ca7a3"   # Replace with latest Amazon Linux 2 AMI
 instance_type = "t3.medium"
 key_name      = "ajaybalakeypair"
