@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    bucket         = "dharma-terraform-state"
+    bucket         = "dharma-terraform-state1"
     key            = "jenkins/terraform.tfstate"
     region         = "ap-south-2"
     encrypt        = true
